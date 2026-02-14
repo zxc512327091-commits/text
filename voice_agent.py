@@ -2,10 +2,6 @@ import argparse
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
-from openai import OpenAI
-from twilio.rest import Client as TwilioClient
-
 
 @dataclass
 class VoiceAgentConfig:
@@ -16,6 +12,10 @@ class VoiceAgentConfig:
 class VoiceAgent:
     def __init__(self, config: VoiceAgentConfig | None = None) -> None:
         self.config = config or VoiceAgentConfig()
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError("未安装 openai 依赖，请先执行: pip install -r requirements.txt") from exc
         self.openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     def build_call_script(self, objective: str, recipient_name: str | None = None) -> str:
@@ -41,8 +41,28 @@ class VoiceAgent:
         return text[: self.config.max_chars]
 
 
+class OfflineVoiceAgent:
+    """本地离线文案生成器，便于无 API 凭据时快速联调流程。"""
+
+    def __init__(self, config: VoiceAgentConfig | None = None) -> None:
+        self.config = config or VoiceAgentConfig()
+
+    def build_call_script(self, objective: str, recipient_name: str | None = None) -> str:
+        target = recipient_name or "您好"
+        text = (
+            f"{target}，打扰了。我这边来电是想和您确认：{objective}。"
+            "现在方便简单沟通一下吗？"
+        )
+        return text[: self.config.max_chars]
+
+
 class PhoneCaller:
     def __init__(self) -> None:
+        try:
+            from twilio.rest import Client as TwilioClient
+        except ImportError as exc:
+            raise RuntimeError("未安装 twilio 依赖，请先执行: pip install -r requirements.txt") from exc
+
         self.account_sid = os.getenv("TWILIO_ACCOUNT_SID")
         self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
         self.from_number = os.getenv("TWILIO_FROM_NUMBER")
@@ -74,14 +94,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--to", required=True, help="被叫号码（E.164 格式，如 +8613800000000）")
     parser.add_argument("--name", default=None, help="被叫姓名（可选）")
     parser.add_argument("--dry-run", action="store_true", help="仅生成文案，不实际发起呼叫")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="离线模式：不调用 OpenAI API，使用本地模板生成文案（适合快速测试）",
+    )
     return parser.parse_args()
 
 
-def main() -> None:
+def load_env_file() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
     load_dotenv()
+
+
+def main() -> None:
+    load_env_file()
     args = parse_args()
 
-    agent = VoiceAgent()
+    agent = OfflineVoiceAgent() if args.offline else VoiceAgent()
     script = agent.build_call_script(args.objective, args.name)
 
     print("=== 生成的语音文案 ===")

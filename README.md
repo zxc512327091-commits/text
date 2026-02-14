@@ -17,7 +17,22 @@ cp .env.example .env
 # 编辑 .env，填入你的 OPENAI 与 TWILIO 凭据
 ```
 
-## 3) 先进行文案生成（不打电话）
+## 3) 快速测试（不依赖 OpenAI，不打电话）
+
+```bash
+python voice_agent.py \
+  --objective "确认您是否能参加明天下午三点的面试" \
+  --to "+8613800000000" \
+  --name "王先生" \
+  --offline \
+  --dry-run
+```
+
+说明：
+- `--offline`：使用本地模板生成话术，不调用 OpenAI。
+- `--dry-run`：只输出话术，不会触发 Twilio 呼叫。
+
+## 4) 在线生成文案（调用 OpenAI，不打电话）
 
 ```bash
 python voice_agent.py \
@@ -27,7 +42,7 @@ python voice_agent.py \
   --dry-run
 ```
 
-## 4) 发起实际电话
+## 5) 发起实际电话（OpenAI + Twilio）
 
 ```bash
 python voice_agent.py \
